@@ -1,0 +1,88 @@
+const int levelPin = 7;     // the number of the level pin
+const int pompPin =  9;      // the number of the pomp pin
+const int valvePin = 8;      // the number of valve pin
+unsigned char flowmeter = 2;  // Flow Meter Pin number
+volatile int  flow_frequency;  // Measures flow meter pulses
+unsigned int  litr;          // Calculated litres/min
+unsigned int  s = 1;          // Calculated litres/min
+unsigned long F1;
+unsigned long F2;
+unsigned long T1;
+unsigned long T2;
+void flow ()                  // Interrupt function
+{
+  flow_frequency++;
+}
+void setup() {
+  pinMode(flowmeter, INPUT);
+  pinMode(levelPin, INPUT);
+  pinMode(valvePin, OUTPUT);
+  pinMode(pompPin, OUTPUT);
+  digitalWrite(levelPin, HIGH);
+  Serial.begin(9600);
+  attachInterrupt(0, flow, RISING); // Setup Interrupt
+  sei();                            // Enable interrupts
+  F1 = millis();
+  F2 = F1;
+  T1 = millis();
+  T2 = T1 ;
+}
+void check() {
+  F1 = millis();
+  if (F1 - F2 >= 500)
+  {
+    F2 = F1;              // Updates cloopTime
+    // Pulse frequency (Hz) = 5Q, Q is flow rate in L/min. (Results in +/- 3% range)
+    litr = (flow_frequency ); // (Pulse frequency ) / 5Q = volumetric flow rate in L/min
+    flow_frequency = 0;                   // Reset Counter
+    Serial.print(litr, DEC);            // Print litres/min
+    Serial.println(" L/min");
+  }
+}
+void loop() {
+  check();
+  if (digitalRead(levelPin) == LOW)
+  {
+    check();
+    digitalWrite(pompPin, HIGH);
+    digitalWrite(valvePin, LOW);
+  }
+  else
+  {
+    check();
+    digitalWrite(valvePin, HIGH);
+    timer();
+  }
+
+}
+void timer() {
+  T1 = millis();
+  if (T1 - T2 >= 20000 || s == 1 )
+  {
+    digitalWrite(pompPin, LOW);
+    delay(2000);
+    F1 = millis();
+    if (F1 >= (F2 + 500))
+    {
+      F2 = F1;              // Updates cloopTime
+      // Pulse frequency (Hz) = 5Q, Q is flow rate in L/min. (Results in +/- 3% range)
+      litr = (flow_frequency  / 5); // (Pulse frequency ) / 5Q = volumetric flow rate in L/min
+      if (litr >= 1)
+      {
+        s = 1;
+        Serial.print(litr, DEC);            // Print litres/min
+        Serial.println(" L/min");
+      }
+      else
+      {
+        s = 0;
+        digitalWrite(pompPin, HIGH);
+        T2 = T1;
+        Serial.print(litr, DEC);            // Print litres/min
+        Serial.println(" L/min");
+      }
+      flow_frequency = 0;                   // Reset Counter
+    }
+
+  }
+}
